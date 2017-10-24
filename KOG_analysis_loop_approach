@@ -1,4 +1,7 @@
 # 2103 MWDB This script makes analysis on all files 
+
+# 2103 MWDB This script makes analysis on all files 
+setwd("~/Dropbox/KOG_Oct2017")
 # Load library  ------------------------------------------
 library(qvalue)
 library(plyr)
@@ -6,8 +9,8 @@ library(ggplot2)
 library(plyr)
 
 # KOG analysis for subcategories ------------------------------------------
-setwd("~/Downloads/functionalenrichmentkog_Marcin") # Here is your R script and analysis
-path="./Module_gene_list_txts" # This is a folder name 
+#setwd("~/Downloads/functionalenrichmentkog_Marcin") # Here is your R script and analysis
+path="./DE_preserved_clone" # This is a folder name 
 
 dir_original <- getwd()
 
@@ -70,14 +73,13 @@ names(KOG_cat_table) <- c("KOG_cat", "Counts_array")
 # Import data for DEgenes for KOG enrichment! -----------------------------------------------------------------
 # Creat the list for all the modules and give them name 
 
-ff <- list.files(path="./Module_gene_list_txts", full.names=TRUE)
-myfilelist <- lapply(ff, read.table,  sep=",", header = F)
-names(myfilelist) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+ff <- list.files(path="./DE_preserved_clone", full.names=TRUE)
+myfilelist <- lapply(ff, read.table, col.names = "Gene") # header = F
+names(myfilelist) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 for (i in 1:length(myfilelist)) {
 names(myfilelist[[i]]) <- "gene" 
 print(dim(myfilelist[[i]]))
 }
-
 
 # Filtration step ---------------------------------------------------------
 DE_genes_kog <- list()
@@ -85,7 +87,7 @@ for (i in 1:length(myfilelist)) {
   DE_genes_kog[[i]] <- na.omit(merge(myfilelist[[i]], jgikog, by="gene", all.x=T))
 }
 
-names(DE_genes_kog) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(DE_genes_kog) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 str(DE_genes_kog)
 
 # counting
@@ -94,11 +96,12 @@ for (i in 1:length(myfilelist)) {
   DE_KOG_JGI_count[[i]] <- as.data.frame(table(DE_genes_kog[[i]]$kog_sub_cat))[-1,]  # KOG_JGI replaced kog_sub_cat 
 }
 
-names(DE_KOG_JGI_count) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(DE_KOG_JGI_count) <- list.files(path="./DE_preserved_clone", full.names=FALSE) # 266
 
 for (i in 1:length(myfilelist)) {
-names(DE_KOG_JGI_count[[i]]) <- c("DE_KOG_JGI_count", "Counts_DE")
-}
+  if (class(DE_KOG_JGI_count[[i]]) == "data.frame"){  # needed to add this
+      names(DE_KOG_JGI_count[[i]]) <- c("DE_KOG_JGI_count", "Counts_DE")
+  }}
 
 # Loop for main -----------------------------------------------------------
 DE_KOG_cat <- LETTERS[c(1:23, 25:26)]
@@ -112,7 +115,7 @@ for (j in 1:length(DE_KOG_cat)) {
 names(DE_KOG_cat_table) <- c("DE_KOG_cat", "Counts_DE")
 DE_KOG_cat_list[[i]] <- DE_KOG_cat_table
 }
-names(DE_KOG_cat_list) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(DE_KOG_cat_list) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 
 # Write cvs DE_KOG_cat_tables ---------------------------------------------
@@ -140,7 +143,7 @@ DE_KOG_tes_list[[i]]$ns_others <- (sum(DE_KOG_tes_list[[i]]$Counts_array) - sum(
 DE_KOG_tes_list[[i]]$sum <- DE_KOG_tes_list[[i]]$Counts_DE + DE_KOG_tes_list[[i]]$DE_others + DE_KOG_tes_list[[i]]$ns_in_sub_cat + DE_KOG_tes_list[[i]]$ns_others
 DE_KOG_tes_list[[i]]
 }
-names(DE_KOG_tes_list) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(DE_KOG_tes_list) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 # Write csv subcat_table ---------------------------------------------------------------
 d1_DE_KOG_subcat_table_152 <- "DE_KOG_subcat_table_152"
@@ -176,14 +179,14 @@ colnames(final_tes_list[[i]]) <- c("KOG_sub_cat",  "Counts_DE", "DE_others", "ns
   "ns_others", "p.value", "odds.ratio", "q" )
 str(final_tes_list[[i]])
 }
-names(final_tes_list) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(final_tes_list) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 
 end_tes_list <- list()
 for (i in 1:length(myfilelist)) {
 end_tes_list[[i]] <- arrange(final_tes_list[[i]], q_tes_list[[i]])
 }
-names(end_tes_list) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(end_tes_list) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 # Cutoff q test -----------------------------------------------------------
 cutoff_q_tes <- 0.05   # adjust cut-off if required
@@ -194,7 +197,7 @@ for (i in 1:length(myfilelist)) {
 new_tes_list[[i]] <- subset(end_tes_list[[i]], q < cutoff_q_tes)
 new_matched_tes[[i]] <- merge(new_tes_list[[i]], KOG, by.x="KOG_sub_cat", by.y="KOG_sub_cat", all.x=T)
 }
-names(new_matched_tes) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(new_matched_tes) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 # KOG_sub_cat_enrichment ---------------------------------------------------------------------
 d1_KOG_sub_cat_enrichment_qvalue005_206 <- "DE_KOG_sub_cat_enrichment_qvalue005_206"
@@ -255,7 +258,7 @@ testes_list[[i]]$sum <- testes_list[[i]]$Counts_DE + testes_list[[i]]$DE_others 
 }
 
 testes_list[[i]]
-names(testes_list) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(testes_list) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 # Write the csv here ------------------------------------------------------
 d1_DE_KOG_cat_table_268 <- "DE_KOG_cat_table_268"
@@ -292,14 +295,14 @@ colnames(final_testes_list[[i]]) <- c("KOG_cat",  "Counts_DE", "DE_others", "ns_
 str(final_testes_list[[i]])
 }
 
-names(final_testes_list) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(final_testes_list) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 # Final list 
 end_testes_list <- list()
 for (i in 1:length(myfilelist)) {
 end_testes_list[[i]] <- arrange(final_testes_list[[i]], q_testes_list[[i]])
 }
-names(end_testes_list) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(end_testes_list) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 # Csv down the files  ---------------------------------------------------
 d1_end_testes_list <- "end_testes_list"
@@ -321,7 +324,7 @@ withcutoff <- list()
 for (i in 1:length(myfilelist)) {
 withcutoff[[i]] <- subset(end_testes_list[[i]], q < cutoff_q_testes_list)
 }
-names(withcutoff) <- list.files(path="./Module_gene_list_txts", full.names=FALSE)
+names(withcutoff) <- list.files(path="./DE_preserved_clone", full.names=FALSE)
 
 # Write the cvs -----------------------------------------------------------
 d1_KOG_cat_enrichment_with_cutoff <- "KOG_cat_enrichment_with_cutoff"
