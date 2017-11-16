@@ -257,8 +257,8 @@ save(cr, file = "2001_Low-High-clusterRepro_5000_2.RData")
 # load(file = "Low-High-clusterRepro_10000.RData")
 # load(file = "Preserved network.RData")
 
-ref <-  2 # Select the High data as test   # changed 20012016
-test <- 1 #  Select the Low data as reference
+ref <-  2 # Select the High data as reference   # changed 20012016
+test <- 1 #  Select the Low data as test
 # We could switch ref and test if we want 
 statsObs = cbind(mp$quality$observed[[ref]][[test]][, -1], mp$preservation$observed[[ref]][[test]][, -1])
 statsZ = cbind(mp$quality$Z[[ref]][[test]][, -1], mp$preservation$Z[[ref]][[test]][, -1])
