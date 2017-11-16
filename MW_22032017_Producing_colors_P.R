@@ -1,4 +1,4 @@
-# Hello
+
 #replace here ancient withhigh
 #replace here recent withlow
 
@@ -297,3 +297,49 @@ for (z in 1:length(newlists_left_colors)) {
 }
 
 setwd(dir_original)
+
+# Adding left and right colours
+d1_preserved <- "Extra_DE_preserved_P_lists"
+if (!file.exists(d1_preserved)) dir.create(d1_preserved)
+dir_temp_preserved <- paste0("./", d1_preserved, "")
+setwd(dir_temp_preserved)
+
+newlists_left_colors_all <- list()
+for (i in 1:length(mycollist_left)) {
+  print(paste("My left color", i, "is now taken which is", leftcol[i]))
+    name <- paste("my_color_left_all_",leftcol[i],"_that_is_high_P", sep="")
+    tmp <- mycollist_left[[i]]  #removed list
+    newlists_left_colors_all[[name]] <- tmp
+}
+str(newlists_left_colors_all)
+
+for (z in 1:length(newlists_left_colors_all)) {
+  pre <- "Preserved_high_P_"
+  myname <- names(newlists_left_colors_all[z])
+  post <- ".txt"
+  write.table(newlists_left_colors_all[[z]], 
+              file=paste0(pre, myname, post, sep=""), 
+              row.names = F, col.names = F) # not required as separate doc
+}
+
+# right, modern -------------------------------------------------------------------
+newlists_right_colors_all <- list()
+for (i in 1:length(mycollist_right)) {
+  print(paste("My right color", i, "is now taken which is", rightcol[i]))
+  name <- paste("my_color_right_all_",rightcol[i],"_that_is_law_P", sep="")
+  tmp <- mycollist_right[[i]]  #removed list
+  newlists_right_colors_all[[name]] <- tmp
+}
+str(newlists_right_colors_all)
+
+for (z in 1:length(newlists_right_colors_all)) {
+  pre <- "Preserved_low_P"
+  myname <- names(newlists_right_colors_all[z])
+  post <- ".txt"
+  write.table(newlists_right_colors_all[[z]], 
+              file=paste0(pre, myname, post, sep=""), 
+              row.names = F, col.names = F) # not required as separate doc
+}
+
+
+
