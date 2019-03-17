@@ -1,4 +1,4 @@
-# wgcna code
+# Evolution of transcriptional networks in Daphnia
 
 Code for Frisch, Becker and Wojewodzic paper Titled: "Dissecting the transcriptomic basis of phenotypic evolution in the aquatic keystone grazer Daphnia" 
 
