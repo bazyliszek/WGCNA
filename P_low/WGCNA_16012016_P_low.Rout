@@ -1,0 +1,1559 @@
+
+R version 2.15.2 (2012-10-26) -- "Trick or Treat"
+Copyright (C) 2012 The R Foundation for Statistical Computing
+ISBN 3-900051-07-0
+Platform: x86_64-unknown-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+During startup - Warning message:
+Setting LC_CTYPE failed, using "C" 
+> # Part 1 Importing library, data we need setting up original directory-------------------------------
+> dir_original <- getwd()  # remember to bring it back after you introduce new directory
+> 
+> library(flashClust)
+
+Attaching package: 'flashClust'
+
+The following object(s) are masked from 'package:stats':
+
+    hclust
+
+> library(dynamicTreeCut)  
+> library(WGCNA)
+Loading required package: Hmisc
+Loading required package: grid
+Loading required package: lattice
+Loading required package: survival
+Loading required package: Formula
+Loading required package: ggplot2
+
+Attaching package: 'Hmisc'
+
+The following object(s) are masked from 'package:base':
+
+    format.pval, round.POSIXt, trunc.POSIXt, units
+
+==========================================================================
+*
+*  Package WGCNA 1.34 loaded.
+*
+*    Important note: It appears that your system supports multi-threading,
+*    but it is not enabled within WGCNA in R. 
+*    To allow multi-threading within WGCNA with all available cores, use 
+*
+*          allowWGCNAThreads()
+*
+*    within R. Use disableWGCNAThreads() to disable threading if necessary.
+*    Alternatively, set the following environment variable on your system:
+*
+*          ALLOW_WGCNA_THREADS=<number_of_processors>
+*
+*    for example 
+*
+*          ALLOW_WGCNA_THREADS=64
+*
+*    To set the environment variable in linux bash shell, type 
+*
+*           export ALLOW_WGCNA_THREADS=64
+*
+*     before running R. Other operating systems or shells will
+*     have a similar command to achieve the same aim.
+*
+==========================================================================
+
+
+
+Attaching package: 'WGCNA'
+
+The following object(s) are masked from 'package:stats':
+
+    cor
+
+> options(stringsAsFactors = FALSE)
+> enableWGCNAThreads()
+Allowing parallel execution with up to 63 working processes.
+> 
+> # Part 0 Loading the trait data check you have this file in your folder now!----------------------------------------
+> load(file="WGCNA_USA_environmental_6.rda")
+> p_data_sub <- p_data[c(7:12, 19:24, 31:36, 43:48),]
+> p_data <- p_data_sub
+> 
+> growth_data_sub <- growth_data[c(7:12, 19:24, 31:36, 43:48),]
+> growth_data <- growth_data_sub
+> 
+> retention_data_sub <- retention_data[c(7:12, 19:24, 31:36, 43:48),]
+> retention_data <-  retention_data_sub 
+> 
+> all_env_data_sub <- all_env_data[c(7:12, 19:24, 31:36, 43:48),]
+> all_env_data <- all_env_data_sub 
+> 
+> # Importing data, text = average intensities of DE genes - from contrasts (any), fdr less then 5 %  -------------------------------
+> # 8 replicates each, for USA data
+> my_data <- read.table("normalized_intens_all_genes.txt", header=T)
+> my_data_sub <- my_data[, c(1, 8:13, 20:25, 32:37, 44:49)] 
+> my_data <- my_data_sub 
+> dim(my_data) # 63265 25
+[1] 24679    25
+> 
+> # Add vector for adjusting the gene set we will use for analysis, e.g. DE genes only 
+> DE_genes_USA <- read.table("AllContrasts_DEgenelists_q005_all_in_one.txt")
+> dim(DE_genes_USA)  # 38316 1
+[1] 10439     1
+> DE_genes_USA_unique <- unique(DE_genes_USA)
+> dim(DE_genes_USA_unique) # 12119
+[1] 10439     1
+> DE_genes_USA_unique_vector <- DE_genes_USA_unique[1:10439,] # 12119 DE genes - combining all 3 contrasts
+> length(DE_genes_USA_unique_vector) # 12119
+[1] 10439
+> head(DE_genes_USA_unique_vector, 10)
+ [1] "GENE:JGI_V11_100036" "GENE:JGI_V11_100066" "GENE:JGI_V11_100070"
+ [4] "GENE:JGI_V11_100082" "GENE:JGI_V11_100137" "GENE:JGI_V11_100142"
+ [7] "GENE:JGI_V11_100180" "GENE:JGI_V11_100198" "GENE:JGI_V11_100200"
+[10] "GENE:JGI_V11_100207"
+> 
+> # Match genes of interest with whole data set
+> matched_geneIDs <- my_data[match(DE_genes_USA_unique_vector, my_data$gene), ]
+> dim(matched_geneIDs)  # 12119  49
+[1] 10439    25
+> 
+> USA_data <- matched_geneIDs
+> #dim(USA_data)
+> 
+> # Remove subset [1:100] for computing -------------------------------
+> my_data <- USA_data
+> #[1:100,]
+> 
+> # Make-up -------------------------------
+> my_USA_data <- my_data[,c(-1)] 
+> rownames(my_USA_data) <- my_data[,1]
+> str(my_USA_data) # must be data frame
+'data.frame':	10439 obs. of  24 variables:
+ $ M1_LP  : num  448 3313 4366 466 823 ...
+ $ M1_LP.1: num  560 3299 5426 517 670 ...
+ $ M1_LP.2: num  348 1916 938 628 648 ...
+ $ M1_LP.3: num  362 1756 886 698 744 ...
+ $ M1_LP.4: num  353 3468 3942 651 760 ...
+ $ M1_LP.5: num  364 1868 1055 685 683 ...
+ $ A2_LP  : num  523 2971 4181 584 190 ...
+ $ A2_LP.1: num  503 2358 3623 669 200 ...
+ $ A2_LP.2: num  417 4754 5907 771 332 ...
+ $ A2_LP.3: num  456 5491 5871 820 226 ...
+ $ A2_LP.4: num  368 2119 2429 968 318 ...
+ $ A2_LP.5: num  481 4354 3490 745 191 ...
+ $ A1_LP  : num  802 575 504 1049 200 ...
+ $ A1_LP.1: num  879 589 631 1598 236 ...
+ $ A1_LP.2: num  507 2471 2801 1192 242 ...
+ $ A1_LP.3: num  603 2765 3174 1052 265 ...
+ $ A1_LP.4: num  847 624 479 1322 196 ...
+ $ A1_LP.5: num  611 2424 2890 1087 261 ...
+ $ M2_LP  : num  415 2183 1694 1065 1442 ...
+ $ M2_LP.1: num  473 2173 1693 700 1656 ...
+ $ M2_LP.2: num  460 1186 580 1084 854 ...
+ $ M2_LP.3: num  359 1130 532 1353 795 ...
+ $ M2_LP.4: num  483 1759 1109 1106 1792 ...
+ $ M2_LP.5: num  541 979 629 1040 681 ...
+> 
+> # Transpose data for correlations -------------------------------
+> datExpr1 <- as.data.frame(t(my_USA_data))
+> 
+> # Make up check samples for missing entries and zero-variance genes (data frames needed) -----------------------------------------------------------------
+> gsg1 <- goodSamplesGenes(datExpr1, verbose = 3)
+ Flagging genes and samples with too many missing values...
+  ..step 1
+> gsg1$allOK   # If any is FALSE, insert a short script (from tutorial) to remove offenders
+[1] TRUE
+> 
+> # Cluster samples to find outliers, plot the dendrogram -----------------------------------------------------------------
+> # Cluster samples to find outliers, plot the dendrogram -----------------------------------------------------------------
+> d1_clust <- "Cluster_samples_Average_and_Euclidean_pdfs"
+> if (!file.exists(d1_clust)) dir.create(d1_clust)
+> dir_temp_clust <- paste0("./", d1_clust, "")
+> setwd(dir_temp_clust)
+> 
+> # Average method
+> sampleTree1 = flashClust(dist(datExpr1), method = "average") # flashClust is doing the same as hc but faster
+> pdf(file = "Sample_Tree_average_pdf.pdf",  width = 16, height = 10) 
+> par(mfrow = c(1,1))
+> plot(sampleTree1, main = "Sample clustering_average",xlab="", sub="", cex.lab = 1.2, cex.axis = 1.2, cex.main = 2)
+> sampleTree1
+
+Call:
+hclust(d = d, method = method, members = members)
+
+Cluster method   : average 
+Distance         : euclidean 
+Number of objects: 24 
+
+> dev.off()
+null device 
+          1 
+> 
+> # Euclidean method 
+> sampleTree2 = flashClust(dist(datExpr1, method = "euclidean")) # flashClust is faster then hclust but computation goes faster
+> pdf(file = "Sample_Tree_euclidean_pdf.pdf",  width = 16, height = 10)
+> par(mfrow = c(1,1))
+> plot(sampleTree2, main = "Sample clustering_euclidean",xlab="", sub="", cex.lab = 1.2, cex.axis = 1.2, cex.main = 2)
+> dev.off()
+null device 
+          1 
+> 
+> setwd(dir_original)
+> 
+> # Having a vector with gene names 
+> geneNames <- dimnames(datExpr1)[[2]]
+> 
+> # Save the prepared datasets ----------------------------------------------
+> save(my_USA_data, datExpr1, geneNames, file="WGCNA_datasets_Part1.rda")
+> 
+> # Part 2  Choosing the power ------------------------------------------------------------------
+> powers <- c(c(1:12), seq(from=13, to=33, by=5)) # Choose a set of soft-thresholding powers
+> 
+> # Call the network topology analysis function  --------------------------------------------------------------------
+> sft1 <- pickSoftThreshold(datExpr1, powerVector = powers, verbose = 5)
+pickSoftThreshold: will use block size 10439.
+ pickSoftThreshold: calculating connectivity for given powers...
+   ..working on genes 1 through 10439 of  10439
+   Power SFT.R.sq   slope truncated.R.sq mean.k. median.k. max.k.
+1      1  0.39000  2.0900          0.920 3630.00  3700.000 5350.0
+2      2  0.00285  0.0989          0.786 1740.00  1740.000 3350.0
+3      3  0.13900 -0.6580          0.780  966.00   939.000 2270.0
+4      4  0.31500 -1.0400          0.816  587.00   552.000 1610.0
+5      5  0.43800 -1.2200          0.854  381.00   344.000 1180.0
+6      6  0.51600 -1.3400          0.872  259.00   223.000  886.0
+7      7  0.58500 -1.3900          0.895  183.00   151.000  679.0
+8      8  0.67200 -1.3500          0.942  133.00   105.000  531.0
+9      9  0.71000 -1.4600          0.953   99.30    74.300  439.0
+10    10  0.73100 -1.5600          0.959   75.80    53.900  371.0
+11    11  0.75800 -1.6500          0.968   59.00    39.600  319.0
+12    12  0.75300 -1.7500          0.958   46.70    29.800  277.0
+13    13  0.77100 -1.8100          0.962   37.50    22.600  242.0
+14    18  0.80200 -1.9400          0.962   14.80     6.700  140.0
+15    23  0.84500 -1.9300          0.980    7.17     2.450   91.1
+16    28  0.87200 -1.8800          0.993    3.95     1.000   63.5
+17    33  0.88600 -1.8300          0.996    2.38     0.458   46.4
+> power_data <- as.data.frame(sft1) 
+> 
+> d1_power <- "Power"
+> if (!file.exists(d1_power)) dir.create(d1_power)
+> dir_temp_power <- paste0("./", d1_power, "")
+> setwd(dir_temp_power)
+> write.table(power_data, "Power_table.txt", sep=" ")
+> 
+> # Plot the results --------------------------------------------------------
+> # Scale-free topology fit index as a function of the soft-thresholding power
+> pdf(file = "Choosing_power.pdf", width = 16, height = 10)
+> par(mfrow = c(1,2))
+> cex1 <- 0.9
+> plot(sft1$fitIndices[,1], -sign(sft1$fitIndices[,3])*sft1$fitIndices[,2], xlab="Soft Threshold (power)",
++      ylab="Scale Free Topology Model Fit,signed R^2",type="n", main = paste("Scale independence"))
+> text(sft1$fitIndices[,1], -sign(sft1$fitIndices[,3])*sft1$fitIndices[,2],
++      labels=powers,cex=cex1,col="red")
+> abline(h=0.90,col="salmon") # # this line corresponds to using an R^2 cut-off of h
+> # Mean connectivity as a function of the soft-thresholding power
+> plot(sft1$fitIndices[,1], sft1$fitIndices[,5],
++      xlab="Soft Threshold (power)",ylab="Mean Connectivity", type="n",
++      main = paste("Mean connectivity"))
+> text(sft1$fitIndices[,1], sft1$fitIndices[,5], labels=powers, cex=cex1,col="red")
+> abline(h=0.01,col="blue")
+> dev.off()
+null device 
+          1 
+> 
+> setwd(dir_original)
+> save(sft1, file="WGCNA_sft1_Part2.rda")
+> 
+> 
+> # Part 3  Creating modules based on dynamic cutting! -----------------------------------------------------
+> power = 10   # adjust power!
+> adjacency = adjacency(datExpr1, power = power, type="signed")
+> 
+> # Turn adjacency into topological overlap
+> TOM = TOMsimilarity(adjacency, TOMType="signed", verbose=3)
+..connectivity..
+..matrix multiplication..
+..normalization..
+..done.
+> dissTOM = 1-TOM
+> save(TOM, dissTOM, file="TOM_dissTOM.RData") 
+> 
+> # Call the hierarchical clustering function
+> geneTree = hclust(as.dist(dissTOM), method = "average")
+> 
+> # Plot the resulting clustering tree (dendrogram)
+> pdf("Plot the resulting clustering tree TOM-based dissimilarity.pdf")
+> plot(geneTree, xlab="", sub="", main = "Gene clustering on TOM-based dissimilarity",
++ labels = FALSE, hang = 0.04)
+> dev.off()
+null device 
+          1 
+> 
+> # We like large modules, so we set the minimum module size relatively high:
+> minModuleSize = 100
+> # Module identification using dynamic tree cut:
+> dynamicMods = cutreeDynamic(dendro = geneTree, distM = dissTOM,
++ deepSplit = 2, pamRespectsDendro = FALSE,
++ minClusterSize = minModuleSize)
+ ..cutHeight not given, setting it to 0.99  ===>  99% of the (truncated) height range in dendro.
+ ..done.
+> table(dynamicMods)
+dynamicMods
+   1    2    3    4    5    6    7    8    9   10   11   12   13   14   15   16 
+1349  951  824  749  717  694  586  561  523  427  408  376  371  311  296  214 
+  17   18   19   20   21   22   23 
+ 198  179  157  152  150  130  116 
+> 
+> # Convert numeric lables into colors
+> dynamicColors = labels2colors(dynamicMods)
+> table(dynamicColors)
+dynamicColors
+        black          blue         brown          cyan     darkgreen 
+          586           951           824           311           130 
+      darkred darkturquoise         green   greenyellow        grey60 
+          150           116           717           408           198 
+    lightcyan    lightgreen   lightyellow       magenta  midnightblue 
+          214           179           157           523           296 
+         pink        purple           red     royalblue        salmon 
+          561           427           694           152           371 
+          tan     turquoise        yellow 
+          376          1349           749 
+> # Plot the dendrogram and colors underneath
+> 
+> pdf("Dynamic Tree Cut.pdf")
+> plotDendroAndColors(geneTree, dynamicColors, "Dynamic Tree Cut",
++ dendroLabels = FALSE, hang = 0.03,
++ addGuide = TRUE, guideHang = 0.05,
++ main = "Gene dendrogram and module colors")
+> dev.off()
+null device 
+          1 
+> 
+> # use this for preservation analysis, see functions above
+> geneTree_USA <- geneTree
+> dynamicColors_USA <- dynamicColors
+> save(geneTree_USA, dynamicColors_USA, file="GeneTree_and_dynamicColors_USA.RData") 
+> 
+> # Calculate eigengenes
+> MEList = moduleEigengenes(datExpr1, colors = dynamicColors)
+> MEs_dynamic = MEList$eigengenes
+> # Calculate dissimilarity of module eigengenes
+> MEDiss = 1-cor(MEs_dynamic);
+> # Cluster module eigengenes
+> METree = hclust(as.dist(MEDiss), method = "average")
+> # Plot the result
+> # Merging of modules whose expression proles are very similar
+> pdf("Clustering of module eigengenes.pdf")
+> plot(METree, main = "Clustering of module eigengenes", xlab = "", sub = "")
+> MEDissThres = 0.2  
+> # Plot the cut line into the dendrogram
+> abline(h=MEDissThres, col = "red")
+> # Call an automatic merging function
+> dev.off()
+null device 
+          1 
+> 
+> merge <- mergeCloseModules(datExpr1, dynamicColors, cutHeight = MEDissThres, verbose = 3)
+ mergeCloseModules: Merging modules whose distance is less than 0.2
+   multiSetMEs: Calculating module MEs.
+     Working on set 1 ...
+     moduleEigengenes: Calculating 23 module eigengenes in given set.
+   multiSetMEs: Calculating module MEs.
+     Working on set 1 ...
+     moduleEigengenes: Calculating 18 module eigengenes in given set.
+   Calculating new MEs...
+   multiSetMEs: Calculating module MEs.
+     Working on set 1 ...
+     moduleEigengenes: Calculating 18 module eigengenes in given set.
+> # The merged module colors
+> mergedColors <- merge$colors
+> # Eigengenes of the new merged modules:
+> mergedMEs <- merge$newMEs
+> 
+> pdf(file = "geneDendro-3.pdf")
+> plotDendroAndColors(geneTree, cbind(dynamicColors, mergedColors),
++ c("Dynamic Tree Cut", "Merged dynamic"),
++ dendroLabels = FALSE, hang = 0.03,
++ addGuide = TRUE, guideHang = 0.05)
+> dev.off()
+null device 
+          1 
+> 
+> table(mergedColors)
+mergedColors
+        black          blue         brown          cyan     darkgreen 
+          586           951          1385           311           538 
+      darkred darkturquoise         green        grey60    lightgreen 
+          364           116           717           198           179 
+  lightyellow       magenta  midnightblue        purple           red 
+          157           523           296           427          1065 
+    royalblue           tan     turquoise 
+          152          1125          1349 
+> 
+> # Gene name and mergedColors color
+> geneNames_mergedColors <- as.data.frame(mergedColors, geneNames)
+> head(geneNames_mergedColors)
+                    mergedColors
+GENE:JGI_V11_100036        brown
+GENE:JGI_V11_100066    royalblue
+GENE:JGI_V11_100070    royalblue
+GENE:JGI_V11_100082          red
+GENE:JGI_V11_100137         blue
+GENE:JGI_V11_100142      magenta
+> dim(geneNames_mergedColors)
+[1] 10439     1
+> 
+> #  Sort modules alphabetically according to colors  -----------------------
+> colors.ord <- unique(mergedColors)[order(unique(mergedColors))]
+> modules.ord <- colors.ord[-which(colors.ord=="grey")] # and leave out "grey" outliers
+> 
+> # Make a list of genes belonging to each color group without list names (including "grey")
+> color.groups <- list()
+> for (i in 1:length(colors.ord)) {
++   color.groups[[i]] <- dimnames(datExpr1)[[2]][which(mergedColors == colors.ord[i])]
++ }
+> 
+> #for list of the genes in different modules with the names in lists
+> color.groups_with_color_names <- list()
+> for (i in 1:length(colors.ord)) {
++   color.groups_with_color_names[[i]] <- dimnames(datExpr1)[[2]][which(mergedColors == colors.ord[i])]
++   names(color.groups_with_color_names)[i] <- colors.ord[i]
++ }
+> 
+> # # Creating the module_gene_list text file that will be used for  --------
+> # KEGG, KOG, motives, filogenetic stuff, indentify the module that could be used for housekeeping genes, maybe?
+> 
+> d1_mod <- "Module_gene_list_txts"
+> if (!file.exists(d1_mod)) dir.create(d1_mod)
+> dir_temp_mod <- paste0("./", d1_mod, "")
+> setwd(dir_temp_mod)
+> for (i in 1:length(color.groups_with_color_names)) {
++     write.table(substring(color.groups_with_color_names[[i]], 6), quote=FALSE,
++     file= paste0(names(color.groups_with_color_names)[i], "_module_gene_list.txt"), sep = " ", 
++       col.names = FALSE, row.names=FALSE) 
++ }
+> setwd(dir_original)
+> 
+> ## Creating the module size with colors information txt file
+> d1_mod_size <- "Module size with color information_txts"
+> if (!file.exists(d1_mod_size)) dir.create(d1_mod_size)
+> dir_temp_mod_size <- paste0("./", d1_mod_size, "")
+> setwd(dir_temp_mod_size)
+> 
+> col.group.size_with_color_names <- vector()
+> for (i in 1:length(colors.ord)) {
++   col.group.size_with_color_names[i] <- length(color.groups[[i]])
++ }
+> write.table((t(cbind(colors.ord, col.group.size_with_color_names))), file="Module size with color information.txt", 
++   sep = " ",  col.names = FALSE, row.names=FALSE)
+> setwd(dir_original)
+> 
+> save(colors.ord, modules.ord, color.groups, color.groups_with_color_names, 
++   mergedColors, geneNames_mergedColors, file = 'mergedColors_Part4.RData')
+> 
+> # Part 5 Calculate module eigengenes and correlation between modules -------------
+> MEs <- mergedMEs
+> signif <- signif(cor(MEs, use="p"), 2)
+> write.table(signif, "Signif_module_eigengenes_correlations.txt", sep=" ", row.names=FALSE) 
+> 
+> pdf(file = "Heatmap_for_Signif_module_eigengenes_correlations.pdf",  width = 16, height = 10) 
+> par(mfrow = c(1,1))
+> heatmap(signif, main = "Heatmap_Signif_module_eigengenes_correlations",
++   xlab="", sub="", cex.lab = 0.1, cex.axis = 0.1, cex.main = 0.1)
+> dev.off()
+null device 
+          1 
+> 
+> # dissimilarity between modules
+> dissimMEs <- (1-t(cor(MEs, method="p")))/2   # NB check why transpose and division by 2
+> write.table(dissimMEs, "dissimilarity between modules.txt", sep=" ", row.names=FALSE) 
+> 
+> pdf("Dissimilarity between modules_heatmap.pdf", 10, 10)
+> heatmap(as.matrix(dissimMEs), 
++   main="Dissimilarity between modules")
+> dev.off()
+null device 
+          1 
+> 
+> hclustMEs <- flashClust(as.dist(dissimMEs), method="average")
+> 
+> #NB. It is working on super computer ok!
+> pdf("Clustering on dissimilarity between modules_based on eigengenes_Part5.pdf")
+> par(mfrow=c(1,1))
+> plot(hclustMEs,  main="Clustering tree based on the module eigengenes",
++   xlab="", sub="", cex.lab = 1.2, cex.axis = 1.2, cex.main = 2)
+> dev.off()
+null device 
+          1 
+> 
+> save(MEs, dissimMEs, hclustMEs, file="Dissimilarity between modules_Part5.rda")
+> 
+> # Part 6 import physio data and plot --------------------------------------
+> # A) P molar per biomass
+> p_trait <- p_data
+> str(p_trait)  # NB. change this to numeric
+'data.frame':	24 obs. of  2 variables:
+ $ sample: chr  "M1_LP" "M1_LP" "M1_LP" "M1_LP" ...
+ $ P     : chr  "741" "1001" "773" "840" ...
+> # B) growth rate
+> growth_rate_trait <- growth_data
+> str(growth_rate_trait)
+'data.frame':	24 obs. of  2 variables:
+ $ sample: chr  "M1_LP" "M1_LP" "M1_LP" "M1_LP" ...
+ $ growth: chr  "0.026" "0.0279" "0.0316" "0.0268" ...
+> # C) Retention data
+> retention_trait <- retention_data
+> str(retention_trait)
+'data.frame':	24 obs. of  2 variables:
+ $ sample   : chr  "M1_LP" "M1_LP" "M1_LP" "M1_LP" ...
+ $ retention: chr  "1.88e-10" "1.63e-10" "1.36e-10" "1.82e-10" ...
+> str(all_env_data)
+'data.frame':	24 obs. of  4 variables:
+ $ sample   : chr  "M1_LP" "M1_LP" "M1_LP" "M1_LP" ...
+ $ P        : chr  "741" "1001" "773" "840" ...
+ $ growth   : chr  "0.026" "0.0279" "0.0316" "0.0268" ...
+ $ retention: chr  "1.88e-10" "1.63e-10" "1.36e-10" "1.82e-10" ...
+> 
+> # Part 7 Combined all physiological data with transcript data ------------------
+> # Combined all physiological data with transcript data
+> # NOTICE I have now given names for labels and new variables
+> # with capital letters and also I printed adjacency with p values
+> MET <- orderMEs(cbind(MEs, P = as.numeric(p_trait$P), 
++   Growth = as.numeric(growth_rate_trait$growth), 
++   Retention = as.numeric(retention_trait$retention)))
+> str(MET)
+'data.frame':	24 obs. of  21 variables:
+ $ MEblue         : num  -0.1956 -0.1897 -0.0859 -0.0768 -0.1928 ...
+ $ MEgreen        : num  0.0396 0.0502 0.2563 0.2288 -0.0141 ...
+ $ MEdarkgreen    : num  0.3734 0.4943 0.1536 0.1073 0.0179 ...
+ $ MEgrey60       : num  0.164 0.233 0.194 0.218 -0.117 ...
+ $ MEtan          : num  -0.00143 0.09776 0.42507 0.34802 0.09105 ...
+ $ MEmagenta      : num  0.195 0.181 0.519 0.455 0.197 ...
+ $ MEturquoise    : num  0.403 0.408 0.283 0.233 0.375 ...
+ $ MElightyellow  : num  -0.019 -0.0497 -0.2469 -0.1901 -0.194 ...
+ $ MEblack        : num  -0.178 -0.217 -0.21 -0.176 -0.151 ...
+ $ MEbrown        : num  0.0678 -0.0191 -0.2374 -0.201 0.0595 ...
+ $ MEdarkred      : num  -0.285 -0.29 -0.28 -0.237 -0.234 ...
+ $ MEred          : num  -0.2679 -0.2974 -0.1326 -0.0894 -0.2325 ...
+ $ MElightgreen   : num  -0.348 -0.353 -0.224 -0.151 -0.301 ...
+ $ MEmidnightblue : num  -0.324 -0.345 -0.279 -0.235 -0.332 ...
+ $ MEdarkturquoise: num  -0.00842 -0.01831 -0.19849 -0.19069 0.01411 ...
+ $ Growth         : num  0.026 0.0279 0.0316 0.0268 0.0294 0.0298 0.0456 0.037 0.0425 0.0401 ...
+ $ MEpurple       : num  -0.245 -0.245 -0.206 -0.177 -0.241 ...
+ $ Retention      : num  1.88e-10 1.63e-10 1.36e-10 1.82e-10 1.64e-10 1.87e-10 2.53e-10 2.53e-10 2.57e-10 2.53e-10 ...
+ $ MEroyalblue    : num  0.1018 0.1513 -0.0791 -0.0958 0.1467 ...
+ $ MEcyan         : num  -0.1851 -0.1685 -0.0994 -0.1064 -0.1819 ...
+ $ P              : num  741 1001 773 840 768 ...
+> 
+> #Plot eigengene dendro and heatmap
+> pdf(file = "Eigengene dendro and heatmap_all traits.pdf",160,100)
+> plotEigengeneNetworks(MET,"", marDendro=c(0,4,1,2),
++ marHeatmap=c(5, 5, 0.5, 2), cex.lab=0.9, xLabelsAngle=90, printAdjacency=T, 
++   cex.adjacency = 0.25)
+> dev.off()
+null device 
+          1 
+> 
+> save(MET, file="Eigengene combined with all traits_Part7.rda")
+> ###
+> # Part 8 Plot MEpairs with traits and do correlations including p statistics------------------------------------------------------------  
+> # Pairwise scatter plots of the samples and (or) traits -------------------
+> d1_scatter <- "Part8a_pairwise scatter plot_eigengenes_pdfs"
+> dir_tempo_scatter <- paste0("./", d1_scatter, "")
+> if (!file.exists(d1_scatter)) dir.create(d1_scatter)
+> setwd(dir_tempo_scatter)
+> 
+> pdf(file = "pairwise scatter plot_eigengenes.pdf", 160, 100)
+> plotMEpairs(MEs)
+> dev.off()
+null device 
+          1 
+> 
+> # pairwise scatter plots of the samples along the module eigengenes for each trait!
+> pdf(file = "Pairwise scatter plot_eigengenes with respiration.pdf",160,100)
+> plotMEpairs(MEs, y=c(as.numeric(p_data$P)))
+> dev.off()
+null device 
+          1 
+> 
+> # pairwise scatter plots of the samples along the module eigengenes
+> pdf(file = "Pairwise scatter plot_eigengenes with growth_rate_trait.pdf",160,100)
+> plotMEpairs(MEs, y=c(as.numeric(growth_rate_trait$growth)))
+> dev.off()
+null device 
+          1 
+> 
+> # pairwise scatter plots of the samples along the module eigengenes
+> pdf(file = "Pairwise scatter plot_eigengenes with Retention.pdf",160,100)
+> plotMEpairs(MEs, y=c(as.numeric(retention_trait$retention)))
+> dev.off()
+null device 
+          1 
+> setwd(dir_original)  # !!!
+> 
+> # Module heatmaps (with loop approach) 
+> d1_loop <- "Part8b_Heatmap_module_with_loop_approach_pdfs"
+> dir_tempo_loop <- paste0("./", d1_loop, "")
+> if (!file.exists(d1_loop)) dir.create(d1_loop)
+> setwd(dir_tempo_loop)
+> 
+> for (i in 1:length(unique(mergedColors))) {
++ which.module <- unique(mergedColors)[i]
++ pdf(file = paste0(which.module, "_heatmap_module.pdf"))
++ ME=MEs[, paste("ME", which.module, sep="")]
++ par(mfrow=c(2,1),mar=c(0.3, 5.5, 3, 2))
++ plotMat(t(scale(datExpr1[ ,mergedColors == which.module])),
++         nrgcols=30, rlabels=F, rcols=which.module, 
++         main=which.module, cex.main=2)
++ par(mar=c(5, 4.2, 0, 0.7))
++ barplot(ME, col=which.module, main="", cex.main=2, 
++         ylab="Eigengene expression", xlab="Array sample")
++ dev.off() 
++ }
+> 
+> setwd(dir_original)  # !!!
+> 
+> #Part9
+> ###
+> # Part 9 Correlation and p values of correlation for physiological data and eigengenes in each module --------
+> # signif function is only rounding the number 
+> # if you want exact statistics do that: pstat <- cor.test(respiration_trait[,2], MEs$MEturquoise)
+>   # respiration
+> 
+> # significance test for correlation of physiological data and module
+>     # p_data
+> corelation_table_p_data <- signif(cor(as.numeric(p_data$P), MEs, use="p"), 2)
+> nSamples <- length(as.numeric(p_data$P))
+> p_corelation_table_p_data <- signif(corPvalueStudent(cor(as.numeric(p_data$P), MEs, use="p"), nSamples= nSamples), 2)     
+> cor_p_p_data <- unlist(rbind(corelation_table_p_data, p_corelation_table_p_data))
+> rownames(cor_p_p_data) <- c("correlation", "pvalue") 
+> 
+>     # growth
+> corelation_table_growth <- signif(cor(as.numeric(growth_data$growth), MEs, use="p"), 2)
+> nSamples <- length(growth_data$growth)
+> p_corelation_table_growth <- signif(corPvalueStudent(cor(as.numeric(growth_data$growth), MEs, use="p"), nSamples= nSamples), 2)     
+> cor_p_growth <- unlist(rbind(corelation_table_growth, p_corelation_table_growth))
+> rownames(cor_p_growth) <- c("correlation", "pvalue") 
+> 
+>   #retention 
+> corelation_table_retention <- signif(cor(as.numeric(retention_data$retention), MEs, use="p"), 2)
+> nSamples <- length(retention_data$retention)
+> p_corelation_table_retention <- signif(corPvalueStudent(cor(as.numeric(retention_data$retention), MEs, use="p"), nSamples= nSamples), 2)     
+> cor_p_retention <- unlist(rbind(corelation_table_retention, p_corelation_table_retention))
+> rownames(cor_p_retention) <- c("correlation", "pvalue") 
+> 
+> d1_cor <- "Correlation and pvalues for respiration for all modules based on eigengene_txts"
+> if (!file.exists(d1_cor)) dir.create(d1_cor)
+> dir_temp_cor <- paste0("./", d1_cor, "")
+> setwd(dir_temp_cor)
+> 
+> write.table(cor_p_p_data, file="Correlation and pvalues for P for all modules based on eigengene.txt", sep=" ", col.names=T, 
++   row.names=T)  
+> write.table(cor_p_growth, file="Correlation and pvalues for growth rate for all modules based on eigengene.txt", sep=" ", col.names=T, 
++   row.names=T) 
+> write.table(cor_p_retention, file="Correlation and pvalues for retention for all modules based on eigengene.txt", sep=" ", col.names=T, 
++   row.names=T)
+> 
+> setwd(dir_original)
+> 
+> # Part 10 Gene significance for each trait and mean module siginificane with trait------------------------------------------------------------------
+> # GS1 is replaced now to GS_resp # Next module significance is defined as average gene significance.
+> # NB. Think about puting the for loop
+> GS_p_data <- as.numeric(cor(as.numeric(p_data$P),datExpr1, use="p"))
+> GeneSignificance_p_data <- abs(GS_p_data) 
+> ModuleSignificance_p_data <- tapply(GeneSignificance_p_data, mergedColors, mean, na.rm=T)
+> geneTraitSignificance_p_data <- t(as.data.frame(cor(as.numeric(p_data$P), datExpr1, use="p")))
+> colnames(geneTraitSignificance_p_data) <- "P"
+> 
+> GS_growth <- as.numeric(cor(as.numeric(growth_data$growth),datExpr1, use="p"))
+> GeneSignificance_growth <- abs(GS_growth) 
+> ModuleSignificance_growth <- tapply(GeneSignificance_growth, mergedColors, mean, na.rm=T)
+> geneTraitSignificance_growth <- t(as.data.frame(cor(as.numeric(growth_data$growth), datExpr1, use="p")))
+> colnames(geneTraitSignificance_growth) <- "Growth"
+> 
+> GS_retention <- as.numeric(cor(as.numeric(retention_data$retention),datExpr1, use="p"))
+> GeneSignificance_retention <- abs(GS_retention) 
+> ModuleSignificance_retention <- tapply(GeneSignificance_retention, mergedColors, mean, na.rm=T)
+> geneTraitSignificance_retention <- t(as.data.frame(cor(as.numeric(retention_data$retention), datExpr1, use="p")))
+> colnames(geneTraitSignificance_retention) <- "Retention"
+> 
+> # and Plotting module significance
+> d1_clust_modsig <- "Plotting module significance_pdf"
+> if (!file.exists(d1_clust_modsig)) dir.create(d1_clust_modsig)
+> dir_temp_clust_modsig <- paste0("./", d1_clust_modsig, "")
+> setwd(dir_temp_clust_modsig)
+> 
+> pdf("Plotting module significance.pdf")
+> par(mfrow = c(2,2))
+> plotModuleSignificance(GeneSignificance_p_data, mergedColors, 
++   cex.main = 0.8, main="Gene significance across modules  \n for P")
+> plotModuleSignificance(GeneSignificance_growth, mergedColors, 
++   cex.main = 0.8, main="Gene significance across modules  \n for growth rate")
+> plotModuleSignificance(GeneSignificance_retention, mergedColors, 
++   cex.main = 0.8, main="Gene significance across modules  \n for retention")
+> dev.off()
+null device 
+          1 
+> setwd(dir_original)
+> 
+> save(GS_p_data, GeneSignificance_p_data, ModuleSignificance_p_data, 
++   GS_growth, GeneSignificance_growth, ModuleSignificance_growth,
++   GS_retention, GeneSignificance_retention, ModuleSignificance_retention,
++   file="ModuleSignificances_Part_10.rda")
+> 
+> 
+> # # Part 11 again correlations and p values of eigengenes for all traits and modules at the same time--------
+> datTraits = cbind(as.numeric(p_data$P), as.numeric(growth_rate_trait$growth),
++   as.numeric(retention_data$retention))
+> 
+> colnames(datTraits) <- c("P", "Growth", "Retention") 
+> datTraits <- as.data.frame(datTraits)
+> 
+> nGenes = ncol(datExpr1)
+> nSamples = nrow(datExpr1)
+> # Recalculate MEs with color labels
+> #MEs0 = moduleEigengenes(datExpr1, mergedColors)$eigengenes
+> MEs_new = orderMEs(MEs)
+> moduleTraitCor = cor(MEs_new, datTraits, use = "p")
+> moduleTraitPvalue = corPvalueStudent(moduleTraitCor, nSamples)
+> save(MEs_new, file="MEs_Part_11a.rda")
+> 
+> 
+> cor_and_p_together <- cbind(moduleTraitCor, moduleTraitPvalue)
+> colnames(cor_and_p_together) <- c("P_cor", "Growth_cor", "Retention_cor", 
++   "P_pvalue", "Growth_pvalue", "Retention_pvalue")
+> 
+> d1_clust_cp <- "Correlation and pvalues between modules and traits based on eigengenes all traits together"
+> if (!file.exists(d1_clust_cp)) dir.create(d1_clust_cp)
+> dir_temp_clust_cp <- paste0("./", d1_clust_cp, "")
+> setwd(dir_temp_clust_cp)
+> 
+> write.table(cor_and_p_together, file="Correlation and pvalues between modules and traits based on eigengenes all traits together.txt", sep=" ")
+> 
+> 
+> # To display correlations and their p-values in heatmap
+> pdf("Correlation and their pvalues for modules and traits")
+> textMatrix = paste(signif(moduleTraitCor, 2), "\n(",
++ signif(moduleTraitPvalue, 1), ")", sep = "")
+> dim(textMatrix) = dim(moduleTraitCor)
+> par(mar = c(6, 8.5, 3, 3))
+> # Display the correlation values within a heatmap plot
+> labeledHeatmap(Matrix = moduleTraitCor,
++ xLabels = names(datTraits),
++ yLabels = names(MEs_new),
++ ySymbols = names(MEs_new),
++ colorLabels = FALSE,
++ colors = greenWhiteRed(50),
++ textMatrix = textMatrix,
++ setStdMargins = FALSE,
++ cex.text = 0.5,
++ zlim = c(-1,1),
++ main = paste("Correlation module-trait and pvalues based on eigengenes"))
+Warning message:
+In greenWhiteRed(50) :
+  WGCNA::greenWhiteRed: this palette is not suitable for people
+with green-red color blindness (the most common kind of color blindness).
+Consider using the function blueWhiteRed instead.
+> dev.off()
+null device 
+          1 
+> 
+> setwd(dir_original)
+> 
+> save(datTraits, moduleTraitCor, moduleTraitPvalue, cor_and_p_together,
++   file="Correlations and p values of eigengenes_Part_11b.rda") 
+> 
+> ####
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> # Part 11b Selecting for correlations and p values (object: "cor_pval_modules_traits")
+> #  Part 11b Finding the most correlated and significant modules  ---------------------
+> 
+> rownames(cor_and_p_together)
+ [1] "MEblue"          "MEgreen"         "MEdarkgreen"     "MEgrey60"       
+ [5] "MEtan"           "MEmagenta"       "MEturquoise"     "MElightyellow"  
+ [9] "MEblack"         "MEbrown"         "MEdarkred"       "MEred"          
+[13] "MElightgreen"    "MEmidnightblue"  "MEdarkturquoise" "MEpurple"       
+[17] "MEcyan"          "MEroyalblue"    
+> # NB! Setting up value correlation strength you want and p value from cor_and_p_together, later on take union of these two vectors in each list  ---------------------------------------
+> # Notice that you have to chose what you want  as you have 3 options here!
+> 
+> my_correlation <- 0.3  # if conditon is fullfiled you will get 1 in the table
+> correlation_based <- apply(abs(cor_and_p_together[,1:3]), c(1,2),
++   function(x) (x>my_correlation))
+> correlation_based_filter <- apply(correlation_based, 2, function(x) x ==1 )
+> 
+> correlation_trait_list <- list()
+> for (i in 1:length(colnames(correlation_based))) {
++    correlation_trait_list[[i]] <- rownames(correlation_based)[correlation_based_filter[,i]]
++   names(correlation_trait_list)[i] <- colnames(correlation_based)[i]
++ }
+> 
+> correlation_trait_list_final <- correlation_trait_list[lapply(correlation_trait_list,length)>0] 
+> 
+> # For my_pvalue
+> my_pvalue <- 0.1 # if conditon is fullfiled you will get 1 in the table, adjust p also
+> pvalue_based <- apply(cor_and_p_together[,4:6], c(1:2),
++   function(x) x<my_pvalue)
+> pvalue_based 
+                P_pvalue Growth_pvalue Retention_pvalue
+MEblue             FALSE          TRUE             TRUE
+MEgreen            FALSE          TRUE             TRUE
+MEdarkgreen        FALSE          TRUE             TRUE
+MEgrey60           FALSE         FALSE             TRUE
+MEtan              FALSE         FALSE             TRUE
+MEmagenta           TRUE         FALSE             TRUE
+MEturquoise        FALSE         FALSE             TRUE
+MElightyellow      FALSE         FALSE             TRUE
+MEblack            FALSE         FALSE             TRUE
+MEbrown            FALSE          TRUE             TRUE
+MEdarkred          FALSE         FALSE             TRUE
+MEred              FALSE         FALSE             TRUE
+MElightgreen       FALSE         FALSE            FALSE
+MEmidnightblue     FALSE         FALSE            FALSE
+MEdarkturquoise    FALSE          TRUE             TRUE
+MEpurple           FALSE          TRUE             TRUE
+MEcyan              TRUE          TRUE             TRUE
+MEroyalblue         TRUE         FALSE            FALSE
+> 
+> pvalue_based_filter <- apply(pvalue_based, 2, function(x) x ==1 )
+> pvalue_based_filter
+                P_pvalue Growth_pvalue Retention_pvalue
+MEblue             FALSE          TRUE             TRUE
+MEgreen            FALSE          TRUE             TRUE
+MEdarkgreen        FALSE          TRUE             TRUE
+MEgrey60           FALSE         FALSE             TRUE
+MEtan              FALSE         FALSE             TRUE
+MEmagenta           TRUE         FALSE             TRUE
+MEturquoise        FALSE         FALSE             TRUE
+MElightyellow      FALSE         FALSE             TRUE
+MEblack            FALSE         FALSE             TRUE
+MEbrown            FALSE          TRUE             TRUE
+MEdarkred          FALSE         FALSE             TRUE
+MEred              FALSE         FALSE             TRUE
+MElightgreen       FALSE         FALSE            FALSE
+MEmidnightblue     FALSE         FALSE            FALSE
+MEdarkturquoise    FALSE          TRUE             TRUE
+MEpurple           FALSE          TRUE             TRUE
+MEcyan              TRUE          TRUE             TRUE
+MEroyalblue         TRUE         FALSE            FALSE
+> 
+> pvalue_trait_list <- list()
+> for (i in 1:length(colnames(pvalue_based))) {
++    pvalue_trait_list[[i]] <- rownames(pvalue_based)[pvalue_based_filter[,i]]
++   names(pvalue_trait_list)[i] <- colnames(pvalue_based)[i]
++ }
+> 
+> pvalue_trait_list_final <-pvalue_trait_list[lapply(pvalue_trait_list,length)>0] 
+> 
+> # Both conditions true (p and cor): # if conditon is fullfiled you will get TRUE in the table
+> correlation_and_pvalue_based <- apply(abs(cor_and_p_together[,1:3]), c(1,2),
++     function(x) (x>my_correlation)) & apply(cor_and_p_together[,4:6], c(1,2),
++     function(x) (x<my_pvalue))
+> 
+> correlation_and_pvalue_based 
+                P_cor Growth_cor Retention_cor
+MEblue          FALSE       TRUE          TRUE
+MEgreen         FALSE       TRUE          TRUE
+MEdarkgreen     FALSE       TRUE          TRUE
+MEgrey60        FALSE      FALSE          TRUE
+MEtan           FALSE      FALSE          TRUE
+MEmagenta        TRUE      FALSE          TRUE
+MEturquoise     FALSE      FALSE          TRUE
+MElightyellow   FALSE      FALSE          TRUE
+MEblack         FALSE      FALSE          TRUE
+MEbrown         FALSE       TRUE          TRUE
+MEdarkred       FALSE      FALSE          TRUE
+MEred           FALSE      FALSE          TRUE
+MElightgreen    FALSE      FALSE         FALSE
+MEmidnightblue  FALSE      FALSE         FALSE
+MEdarkturquoise FALSE       TRUE          TRUE
+MEpurple        FALSE       TRUE          TRUE
+MEcyan           TRUE       TRUE          TRUE
+MEroyalblue      TRUE      FALSE         FALSE
+> correlation_and_pvalue_based_filter <- apply(correlation_and_pvalue_based, 2, function(x) x ==1 )
+> correlation_and_pvalue_based_filter
+                P_cor Growth_cor Retention_cor
+MEblue          FALSE       TRUE          TRUE
+MEgreen         FALSE       TRUE          TRUE
+MEdarkgreen     FALSE       TRUE          TRUE
+MEgrey60        FALSE      FALSE          TRUE
+MEtan           FALSE      FALSE          TRUE
+MEmagenta        TRUE      FALSE          TRUE
+MEturquoise     FALSE      FALSE          TRUE
+MElightyellow   FALSE      FALSE          TRUE
+MEblack         FALSE      FALSE          TRUE
+MEbrown         FALSE       TRUE          TRUE
+MEdarkred       FALSE      FALSE          TRUE
+MEred           FALSE      FALSE          TRUE
+MElightgreen    FALSE      FALSE         FALSE
+MEmidnightblue  FALSE      FALSE         FALSE
+MEdarkturquoise FALSE       TRUE          TRUE
+MEpurple        FALSE       TRUE          TRUE
+MEcyan           TRUE       TRUE          TRUE
+MEroyalblue      TRUE      FALSE         FALSE
+> 
+> correlation_and_pvalue_based_trait_list <- list()
+> for (i in 1:length(colnames(correlation_and_pvalue_based))) {
++    correlation_and_pvalue_based_trait_list[[i]] <- rownames(correlation_and_pvalue_based)[correlation_and_pvalue_based_filter[,i]]
++   names(correlation_and_pvalue_based_trait_list)[i] <- colnames(correlation_and_pvalue_based)[i]
++ }
+> 
+> correlation_and_pvalue_based_trait_list_final <- 
++   correlation_and_pvalue_based_trait_list[lapply(correlation_and_pvalue_based_trait_list,length)>0] 
+> 
+> cor_pval_modules_traits <- correlation_and_pvalue_based_trait_list_final
+> 
+> save(cor_pval_modules_traits, file="cor_pval_modules_traits_11c.rda")
+> 
+> 
+>  # Part 12. Gene significance for all trait verus module membership ------------------------------------------------------- 
+> # Gene module membership is based on eigengene value and will be used for all traits
+> modNames = substring(names(MEs_new), 3) # names (colors) of the modules
+> geneModuleMembership = as.data.frame(cor(datExpr1, MEs_new, use = "p"))
+> MMPvalue = as.data.frame(corPvalueStudent(as.matrix(geneModuleMembership), nSamples))
+> names(geneModuleMembership) = paste("MM", modNames, sep="")
+> names(MMPvalue) = paste("p.MM", modNames, sep="")
+> 
+> d1_module_mem <- "Gene significance vs module membership for all trait"
+> if (!file.exists(d1_module_mem)) dir.create(d1_module_mem)
+> dir_temp_module_mem <- paste0("./", d1_module_mem, "")
+> setwd(dir_temp_module_mem)
+> 
+> # Respiration (NB. We also calculated pvalues for correlation with gene expresion with a trait 
+> # but we do not use this information further on, also we did it for all traits!)
+> #NB2. We did not take absolute values as we want to see positive and negative correlations
+> # between GS and MM
+> GSPvalue_p_data = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance_p_data), nSamples))
+> names(GSPvalue_p_data) <- paste("p.GS.", "P", sep="")
+> 
+> pdf("GS_p_data_vs_MM.pdf")
+> par(mfrow = c(2, 2)) # adjust by length(final$TRAIT!!!!_cor)  # adjust
+> colorOfColumn <- substring(names(geneModuleMembership), 3)
+> par(mfrow = c(2, 2))
+> selectModules = substring(cor_pval_modules_traits$P_cor, 3) # you define trait
+> par(mfrow = c(2,2)) # length(selectModules)/2
+> for (module in selectModules) {
++     column = match(module, colorOfColumn)
++     #verboseScatterplot(geneModuleMembership[restModule, column], 
++     verboseScatterplot(geneModuleMembership[, column], 
++       geneTraitSignificance_p_data, 
++       xlab = paste("Module Membership ",
++         module, "module"), ylab = "GS.P", main = paste("Module memebership.", module,
++         "vs. GS"), col = module)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> # Growth 
+> GSPvalue_growth = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance_growth), nSamples))
+> names(GSPvalue_growth) <- paste("p.GS.", "Growth", sep="")
+> 
+> pdf("GS_growth_vs_MM.pdf")
+> par(mfrow = c(2, 2)) # adjust by length(final$TRAIT!!!!_cor)
+> colorOfColumn <- substring(names(geneModuleMembership), 3)
+> par(mfrow = c(2, 2))
+> #selectModules = c("turquoise", "grey") # adjust modules ...
+> selectModules = substring(cor_pval_modules_traits$Growth_cor, 3) # you define trait here
+> par(mfrow = c(2, 2))
+> for (module in selectModules) {
++     column = match(module, colorOfColumn)
++     verboseScatterplot(geneModuleMembership[, column], 
++       geneTraitSignificance_growth, 
++       xlab = paste("Module Membership ",
++         module, "module"), ylab = "GS.growth", main = paste("Module memebership.", module,
++         "vs. GS"), col = module)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> # Retention
+> GSPvalue_retention = as.data.frame(corPvalueStudent(as.matrix(geneTraitSignificance_retention), nSamples))
+> names(GSPvalue_retention) <- paste("p.GS.", "Retention", sep="")
+> 
+> pdf("GS_retention_vs_MM.pdf")
+> par(mfrow = c(2, 2)) # adjust by length(final$TRAIT!!!!_cor)
+> colorOfColumn <- substring(names(geneModuleMembership), 3)
+> par(mfrow = c(2, 2))
+> #selectModules = c("turquoise", "grey") # adjust modules ...
+> selectModules = substring(cor_pval_modules_traits$Retention_cor, 3) 
+> par(mfrow = c(2, 2))  #lenth(selectModules
+> for (module in selectModules) {
++     column = match(module, colorOfColumn)
++     verboseScatterplot(geneModuleMembership[, column], 
++       geneTraitSignificance_retention, 
++       xlab = paste("Module Membership ",
++         module, "module"), ylab = "GS.retention", main = paste("Module memebership.", module,
++         "vs. GS"), col = module)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> 
+> setwd(dir_original)
+> 
+> 
+> # Part 12 Network statistics Intramodular connectivity ------------------------------------------------------
+> ADJ1 <- abs(cor(datExpr1,use="p"))^power  # NB. check the  power here again! They put 6 before!
+> Alldegrees1 <- intramodularConnectivity(ADJ1, mergedColors)
+> write.table(Alldegrees1, file= "Intramodular connectivity.txt", col.names=T, sep=" ")
+> head(Alldegrees1)
+                       kTotal  kWithin      kOut       kDiff
+GENE:JGI_V11_100036  95.89805 49.23013  46.66793    2.562200
+GENE:JGI_V11_100066  31.04084 20.39637  10.64446    9.751914
+GENE:JGI_V11_100070  26.89086 12.92343  13.96744   -1.044010
+GENE:JGI_V11_100082  75.73682 16.16748  59.56934  -43.401857
+GENE:JGI_V11_100137  54.87616 23.11828  31.75789   -8.639611
+GENE:JGI_V11_100142 186.60209 26.03841 160.56368 -134.525275
+> 
+> # Part 13 GS vs intramodular connectivity - Individul traits   
+> d1_int_con <- "Gene significance vs intramodular connectivity for all trait"
+> if (!file.exists(d1_int_con)) dir.create(d1_int_con)
+> dir_temp_int_con <- paste0("./", d1_int_con, "")
+> setwd(dir_temp_int_con)
+> 
+> # P
+> colorlevels=unique(mergedColors)
+> pdf("Relationship between gene significance and intramodular connectivity_P.pdf", 15, 20)
+> par(mfrow = c(4, 4)) #as.integer(0.5+length(colorlevels)/2)
+> par(mar = c(4,5,3,1))
+> for (i in c(1:length(colorlevels)))
++ {
++   whichmodule <- colorlevels[[i]];
++   restrict1 <- (mergedColors==whichmodule);
++   verboseScatterplot(Alldegrees1$kWithin[restrict1],
++ GeneSignificance_p_data[restrict1], col=mergedColors[restrict1], # GS based on respiration follow for other traits
++ main=whichmodule,
++ xlab = "Connectivity", ylab = "Gene Significance_p_data", abline = TRUE)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> # Growth
+> colorlevels=unique(mergedColors)
+> pdf("Relationship between gene significance and intramodular connectivity_Growth.pdf", 15, 20)
+> par(mfrow = c(4, 4))
+> par(mar = c(4,5,3,1))
+> for (i in c(1:length(colorlevels)))
++ {
++   whichmodule <- colorlevels[[i]];
++   restrict1 <- (mergedColors==whichmodule);
++   verboseScatterplot(Alldegrees1$kWithin[restrict1],
++ GeneSignificance_growth[restrict1], col=mergedColors[restrict1],
++ main=whichmodule,
++ xlab = "Connectivity", ylab = "Gene Significance_growth", abline = TRUE)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> # Retention
+> colorlevels=unique(mergedColors)
+> pdf("Relationship between gene significance and intramodular connectivity_retention.pdf", 15, 20)
+> par(mfrow = c(4, 4))
+> par(mar = c(4,5,3,1))
+> for (i in c(1:length(colorlevels)))
++ {
++   whichmodule <- colorlevels[[i]];
++   restrict1 <- (mergedColors==whichmodule);
++   verboseScatterplot(Alldegrees1$kWithin[restrict1],
++ GeneSignificance_retention[restrict1], col=mergedColors[restrict1],
++ main=whichmodule,
++ xlab = "Connectivity", ylab = "Gene Significance_retention", abline = TRUE)
++ }
+> dev.off()
+null device 
+          1 
+> 
+> 
+> 
+> # Part 14 Generalizing intramodular connectivity for all genes on the array
+> datKME=signedKME(datExpr1, MEs, outputColumnName="MM.")
+> # NB. This function is doing a correlation between datExpr and MEs. We did this ealier
+> head(datKME)
+                       MM.blue   MM.green MM.darkgreen   MM.grey60       MM.tan
+GENE.JGI_V11_100036 -0.2119891 -0.5564579   -0.3415799 -0.46933961 -0.709800024
+GENE.JGI_V11_100066 -0.3956039 -0.2967946    0.1787138 -0.02652868 -0.001379515
+GENE.JGI_V11_100070 -0.5221314 -0.4427482    0.2566541 -0.03392909 -0.104494337
+GENE.JGI_V11_100082  0.3292215 -0.1727589   -0.6919086 -0.54484120 -0.482908043
+GENE.JGI_V11_100137  0.6744969  0.6861959    0.3934277  0.26890320  0.151850024
+GENE.JGI_V11_100142  0.1946248  0.7730048    0.5778693  0.69662073  0.878525136
+                       MM.magenta MM.turquoise MM.lightyellow   MM.black
+GENE.JGI_V11_100036 -0.4631504260   -0.5171549      0.8119213  0.7927926
+GENE.JGI_V11_100066  0.0008858329    0.3412793     -0.4900721 -0.5031415
+GENE.JGI_V11_100070 -0.1006776132    0.3586188     -0.3066762 -0.4222937
+GENE.JGI_V11_100082 -0.5007572996   -0.7955618      0.4878583  0.6878031
+GENE.JGI_V11_100137  0.1479482064    0.1324149     -0.1099642 -0.1275509
+GENE.JGI_V11_100142  0.7973503618    0.6955180     -0.5881743 -0.6124336
+                       MM.brown MM.darkred     MM.red MM.lightgreen
+GENE.JGI_V11_100036  0.79067167  0.3615428  0.5671293    0.23960803
+GENE.JGI_V11_100066 -0.05878396  0.1477518 -0.4184125   -0.42398688
+GENE.JGI_V11_100070  0.10213215  0.1054604 -0.3885427   -0.48393433
+GENE.JGI_V11_100082  0.42858703  0.5126778  0.7666117    0.75115372
+GENE.JGI_V11_100137 -0.54566990 -0.2086644 -0.3390384   -0.03733211
+GENE.JGI_V11_100142 -0.77362538 -0.7565293 -0.6222874   -0.39840997
+                    MM.midnightblue MM.darkturquoise  MM.purple    MM.cyan
+GENE.JGI_V11_100036       0.3573929       0.22244631  0.5722949 -0.1344501
+GENE.JGI_V11_100066      -0.3824283       0.63754404  0.1115256  0.4546115
+GENE.JGI_V11_100070      -0.4356654       0.64958207  0.2107981  0.4649796
+GENE.JGI_V11_100082       0.6106563       0.02657745  0.3136631 -0.2563184
+GENE.JGI_V11_100137       0.3451738      -0.63736858 -0.7706892 -0.4492111
+GENE.JGI_V11_100142      -0.4363343      -0.65136792 -0.7506317 -0.1743827
+                    MM.royalblue
+GENE.JGI_V11_100036  -0.34175855
+GENE.JGI_V11_100066   0.95258279
+GENE.JGI_V11_100070   0.85676489
+GENE.JGI_V11_100082  -0.52154575
+GENE.JGI_V11_100137  -0.25395098
+GENE.JGI_V11_100142  -0.06831356
+> #write.table(datKME, file= "Generalizing intramodular connectivity for all genes on the array.txt", col.names=T, sep=" ")
+> 
+> #Finding genes with high gene significance and high intramodular connectivity in interesting modules
+> # Marcin: make small adjustment for not printing files when file is empty
+> # P
+> modules_MM <- names(datKME)
+> significance_value_p_data <- 0.2
+> membership_value_p_data <- 0.8
+> for (i in 1:length(modules_MM)){
++ FilterGenes <- abs(GS_p_data)> significance_value_p_data & abs(datKME[i])> membership_value_p_data  
++ if (any(FilterGenes) == TRUE){
++ my_filtered_p_data <- substring(dimnames(data.frame(datExpr1))[[2]][FilterGenes], 6)
++ write.table(my_filtered_p_data, file= paste0("P_High GS and high intramodular connectivity_", modules_MM[i], ".txt"), 
++   sep=" ", row.names=F, col.names=F, quote=FALSE)
++ }}
+> 
+> # Growth
+> modules_MM <- names(datKME)
+> significance_value_growth <- 0.2
+> membership_value_growth <- 0.8
+> for (i in 1:length(modules_MM)){
++ FilterGenes <- abs(GS_growth)> significance_value_growth & abs(datKME[i])> membership_value_growth  
++ if (any(FilterGenes) == TRUE){
++ my_filtered_growth <- substring(dimnames(data.frame(datExpr1))[[2]][FilterGenes], 6)
++ write.table(my_filtered_growth, file= paste0("Growth_High GS and high intramodular connectivity_", modules_MM[i], ".txt"), sep=" ", row.names=F, col.names=F, quote=FALSE)
++ }}
+> 
+> # Retention
+> modules_MM <- names(datKME)
+> significance_value_retention <- 0.2
+> membership_value_retention <- 0.8
+> for (i in 1:length(modules_MM)){
++ FilterGenes <- abs(GS_retention)> significance_value_retention & abs(datKME[i])> membership_value_retention  
++ if (any(FilterGenes) == TRUE){
++ my_filtered_retention <- substring(dimnames(data.frame(datExpr1))[[2]][FilterGenes], 6)
++ write.table(my_filtered_retention, file= paste0("Retention_High GS and high intramodular connectivity_", modules_MM[i], ".txt"), sep=" ", row.names=F, col.names=F, quote=FALSE)
++ }}
+> 
+> 
+> setwd(dir_original)
+> 
+> # Summary statistics for why we have chosen GS= 0.2 (3rd Quntile)  adjust this!
+> # Note thet memmership_value was taken 0.8 
+> summary(abs(GS_p_data))
+     Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+0.0000102 0.0871500 0.1908000 0.2263000 0.3321000 0.9057000 
+> summary(abs(GS_growth))
+     Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+0.0000683 0.1403000 0.2812000 0.3054000 0.4475000 0.8895000 
+> summary(abs(GS_retention))
+    Min.  1st Qu.   Median     Mean  3rd Qu.     Max. 
+0.000041 0.284600 0.454600 0.439500 0.594700 0.952800 
+> 
+> summary(abs(datKME[1:dim(datKME)[2]]))   # number of the modules i.e. columns
+    MM.blue             MM.green         MM.darkgreen         MM.grey60        
+ Min.   :0.0001811   Min.   :0.000213   Min.   :0.0000045   Min.   :0.0001172  
+ 1st Qu.:0.1447328   1st Qu.:0.260887   1st Qu.:0.2390582   1st Qu.:0.2791519  
+ Median :0.3017835   Median :0.444232   Median :0.4286650   Median :0.4753376  
+ Mean   :0.3337853   Mean   :0.444247   Mean   :0.4197341   Mean   :0.4514735  
+ 3rd Qu.:0.4879869   3rd Qu.:0.634178   3rd Qu.:0.5953649   3rd Qu.:0.6293546  
+ Max.   :0.9781565   Max.   :0.970649   Max.   :0.9683863   Max.   :0.9439957  
+     MM.tan            MM.magenta       MM.turquoise       MM.lightyellow     
+ Min.   :0.0000382   Min.   :0.00003   Min.   :0.0000156   Min.   :0.0001278  
+ 1st Qu.:0.2816339   1st Qu.:0.24305   1st Qu.:0.2912919   1st Qu.:0.2076286  
+ Median :0.5070368   Median :0.40061   Median :0.4838690   Median :0.3844066  
+ Mean   :0.4739614   Mean   :0.40857   Mean   :0.4736713   Mean   :0.3794708  
+ 3rd Qu.:0.6686035   3rd Qu.:0.56896   3rd Qu.:0.6581146   3rd Qu.:0.5413004  
+ Max.   :0.9614933   Max.   :0.98537   Max.   :0.9863017   Max.   :0.9405523  
+    MM.black            MM.brown           MM.darkred       
+ Min.   :0.0000407   Min.   :0.0001082   Min.   :0.0001293  
+ 1st Qu.:0.2745259   1st Qu.:0.2778922   1st Qu.:0.2759951  
+ Median :0.4707379   Median :0.4741216   Median :0.4869792  
+ Mean   :0.4466397   Mean   :0.4655309   Mean   :0.4581669  
+ 3rd Qu.:0.6223337   3rd Qu.:0.6542837   3rd Qu.:0.6468183  
+ Max.   :0.9709552   Max.   :0.9846516   Max.   :0.9604887  
+     MM.red          MM.lightgreen       MM.midnightblue    MM.darkturquoise   
+ Min.   :0.0001026   Min.   :0.0000328   Min.   :0.000009   Min.   :0.0002056  
+ 1st Qu.:0.2772738   1st Qu.:0.1660259   1st Qu.:0.181962   1st Qu.:0.1872027  
+ Median :0.4735837   Median :0.3421081   Median :0.382716   Median :0.3521357  
+ Mean   :0.4553751   Mean   :0.3621862   Mean   :0.386238   Mean   :0.3639342  
+ 3rd Qu.:0.6390796   3rd Qu.:0.5449399   3rd Qu.:0.573478   3rd Qu.:0.5249543  
+ Max.   :0.9692630   Max.   :0.9054174   Max.   :0.950312   Max.   :0.9749450  
+   MM.purple            MM.cyan           MM.royalblue      
+ Min.   :0.0000923   Min.   :0.0000221   Min.   :0.0000596  
+ 1st Qu.:0.2911120   1st Qu.:0.0951324   1st Qu.:0.1087623  
+ Median :0.4626274   Median :0.2034848   Median :0.2281691  
+ Mean   :0.4461482   Mean   :0.2421531   Mean   :0.2560204  
+ 3rd Qu.:0.5975048   3rd Qu.:0.3449626   3rd Qu.:0.3695738  
+ Max.   :0.9835587   Max.   :0.9840966   Max.   :0.9859504  
+> 
+> # Part 14 Relationship between the module membership measures (e.g. MM.blue) and intramodular connectivity
+> # We do it for all colors/modules and colors info we get from datKME
+> d1_mm_int <- "Module membership vs intramodular connectivity for all trait"
+> if (!file.exists(d1_mm_int)) dir.create(d1_mm_int)
+> dir_temp_mm_int <- paste0("./", d1_mm_int, "")
+> setwd(dir_temp_mm_int)
+> 
+> modules_MM <- names(datKME)
+> pdf("MM_vs_intramodular connectivity.pdf", 15, 15)
+> par(mfrow=c(4,4))
+> #par(mfrow=c(dim(datKME)[2],dim(datKME)[2]/2))
+> which.color <- substring(names(datKME), 4)
+> for (i in 1:length(which.color)){
++ restrictGenes <- mergedColors==which.color[i]
++   #if (any(restrictGenes) == TRUE) {
++ verboseScatterplot(Alldegrees1$kWithin[ restrictGenes],
++                  (datKME[restrictGenes, paste("MM.", which.color[i], sep="")])^power, # raizing the module membership to the power of six, check again 
++                  col=which.color[i],
++                  xlab="Intramodular Connectivity",
++                  ylab="(Module Membership^power")
++ 
++ }
+> #}
+> dev.off()
+null device 
+          1 
+> 
+> setwd(dir_original)
+> save(datKME, modules_MM, file="Modules.rda")  # Run this
+> 
+> # Statistic based on Barbara script ------------------------------------------------------------
+> # Find the most connected gene in each module -----------------------------
+> hubs <- chooseTopHubInEachModule(datExpr1, colorh=mergedColors, type="signed")
+> maxhub <- chooseOneHubInEachModule(datExpr1, colorh=mergedColors, type="signed")
+> 
+> ## col.group.size <- unlist(lapply(color.groups, length))
+> colors.ord <- unique(mergedColors)[order(unique(mergedColors))]
+> 
+> col.group.size <- vector()
+> for (i in 1:length(colors.ord)) {
++   col.group.size[i] <- length(color.groups[[i]])
++ }
+> 
+> module.size <- col.group.size[-which(colors.ord=="grey")]
+> modules.ord <- colors.ord[-which(colors.ord=="grey")] # and leave out "grey" outliers
+> 
+> # Make an array of the data, modules separated, sorted alphabetically
+> # It will be later useful for plotting module expression patterns
+> group.nr <- nrow(as.matrix(table(mergedColors)))   #(table(bwnet$colors)))
+> group.max <- max(as.matrix(table(mergedColors))) #(table(bwnet$colors)))
+> Gr.arr.sort <- array(NA, dim=c(group.max, ncol(datExpr1)-1, group.nr))
+> #dimnames(Gr.arr.sort)[[2]] <- dimnames(datExpr1)[[2]]
+> #dimnames(Gr.arr.sort)[[3]] <- colors.ord
+> 
+> for (i in 1:length(colors.ord)) {
++   print(colors.ord[i])
++   for (j in 1:sum(mergedColors==colors.ord[i])) {
++     Gr.arr.sort[j,,i] <-
++       as.numeric(datExpr1[which(mergedColors == colors.ord[i])[j], -1])
++   }
++ }
+[1] "black"
+[1] "blue"
+[1] "brown"
+[1] "cyan"
+[1] "darkgreen"
+[1] "darkred"
+[1] "darkturquoise"
+[1] "green"
+[1] "grey60"
+[1] "lightgreen"
+[1] "lightyellow"
+[1] "magenta"
+[1] "midnightblue"
+[1] "purple"
+[1] "red"
+[1] "royalblue"
+[1] "tan"
+[1] "turquoise"
+> 
+> # Get adjacency matrices and module statistics
+> adj.list <- vector("list", group.nr)
+> stat.list <- vector("list", group.nr)
+> for (i in 1:group.nr) {
++   print(i)
++   sel.mod <- datExpr1[,which(mergedColors==colors.ord[i])]
++   adj.list[[i]] <- adjacency(sel.mod, type="signed", power=power)
++   stat.list[[i]] <- fundamentalNetworkConcepts(adj.list[[i]])
++ }
+[1] 1
+[1] 2
+[1] 3
+[1] 4
+[1] 5
+[1] 6
+[1] 7
+[1] 8
+[1] 9
+[1] 10
+[1] 11
+[1] 12
+[1] 13
+[1] 14
+[1] 15
+[1] 16
+[1] 17
+[1] 18
+> 
+> names(adj.list) <- colors.ord
+> names(stat.list) <- colors.ord
+> 
+> # Extract the interesting statistics and save into a data frame
+> group.nr <- nrow(as.matrix(table(mergedColors))) #(table(bwnet$colors)))
+> mod.dens <- rep(NA, times = group.nr) # vector()
+> mod.cent <- rep(NA, times = group.nr) # vector()
+> mod.hete <- rep(NA, times = group.nr) # vector()
+> mean.conn <- rep(NA, times = group.nr) # vector()
+> mean.scal.conn <- rep(NA, times = group.nr) # vector()
+> mean.clus.coef <- rep(NA, times = group.nr) # vector()
+> mean.mar <- rep(NA, times = group.nr) # vector()
+> # group.nr <- nrow(as.matrix(table(bwnet.S$colors)))
+> for (i in 1:(group.nr)) {
++   mod.dens[i] <- stat.list[[i]]$Density 
++   mod.cent[i] <- stat.list[[i]]$Centralization
++   mod.hete[i] <- stat.list[[i]]$Heterogeneity
++   mean.conn[i] <- mean(stat.list[[i]]$Connectivity)
++   mean.scal.conn[i] <- mean(stat.list[[i]]$ScaledConnectivity)
++   mean.clus.coef[i] <- mean(stat.list[[i]]$ClusterCoef)
++   mean.mar[i] <- mean(stat.list[[i]]$MAR)
++ }
+> mod.stats <- data.frame(colors.ord, col.group.size, round(mod.dens,3), 
++                         round(mod.cent,3), round(mod.hete,3),
++                         round(mean.conn,3), round(mean.scal.conn,3),
++                         round(mean.clus.coef,3), round(mean.mar,3))
+> colnames(mod.stats) <- c("Module","Size","Density",
++                          "Centralization","Heterogeneity",
++                          "M.connectivity","M.scaled.connect.",
++                          "M.clustering.coeff.","M.max.adj.ratio")
+> 
+> # Get the 10 best connected genes in each module --------------------------
+> top.ten <- matrix(NA, nrow=length(stat.list), ncol=10)
+> for (i in 1:length(stat.list)) {
++   genes.ordered <- names(stat.list[[i]]$Connectivity
++                          [order(stat.list[[i]]$Connectivity,
++                                 decreasing=T)])
++   top.ten[i,] <- genes.ordered[1:10]
++ }
+> colnames(top.ten) <- c("Hub1","Hub2","Hub3","Hub4","Hub5",
++                        "Hub6","Hub7","Hub8","Hub9","Hub10")
+> 
+> module.stats <- cbind(mod.stats,top.ten)
+> module.stats
+          Module Size Density Centralization Heterogeneity M.connectivity
+1          black  586   0.150          0.152         0.408         87.716
+2           blue  951   0.132          0.165         0.530        124.986
+3          brown 1385   0.146          0.173         0.575        201.493
+4           cyan  311   0.142          0.177         0.523         44.154
+5      darkgreen  538   0.153          0.163         0.530         82.361
+6        darkred  364   0.134          0.134         0.393         48.462
+7  darkturquoise  116   0.253          0.173         0.366         29.113
+8          green  717   0.144          0.153         0.475        102.789
+9         grey60  198   0.174          0.128         0.335         34.240
+10    lightgreen  179   0.094          0.079         0.357         16.680
+11   lightyellow  157   0.166          0.118         0.338         25.958
+12       magenta  523   0.174          0.189         0.505         90.737
+13  midnightblue  296   0.102          0.115         0.410         30.169
+14        purple  427   0.172          0.185         0.475         73.127
+15           red 1065   0.098          0.130         0.466        104.557
+16     royalblue  152   0.179          0.177         0.456         27.013
+17           tan 1125   0.121          0.136         0.473        136.524
+18     turquoise 1349   0.165          0.192         0.561        223.046
+   M.scaled.connect. M.clustering.coeff. M.max.adj.ratio                Hub1
+1              0.498               0.214           0.238 GENE:JGI_V11_290568
+2              0.444               0.223           0.239 GENE:JGI_V11_322886
+3              0.457               0.257           0.259 GENE:JGI_V11_307734
+4              0.447               0.235           0.243 GENE:JGI_V11_234154
+5              0.486               0.249           0.254 GENE:JGI_V11_241122
+6              0.500               0.199           0.236 GENE:JGI_V11_109928
+7              0.598               0.337           0.355 GENE:JGI_V11_328154
+8              0.485               0.226           0.240 GENE:JGI_V11_202669
+9              0.579               0.221           0.243 GENE:JGI_V11_301745
+10             0.546               0.141           0.184 GENE:JGI_V11_320025
+11             0.589               0.220           0.252 GENE:JGI_V11_236945
+12             0.481               0.270           0.271 GENE:JGI_V11_301778
+13             0.473               0.155           0.190 GENE:JGI_V11_113416
+14             0.482               0.260           0.265 GENE:JGI_V11_318327
+15             0.431               0.158           0.186 GENE:JGI_V11_232332
+16             0.506               0.278           0.299 GENE:JGI_V11_316591
+17             0.472               0.188           0.207 GENE:JGI_V11_309103
+18             0.463               0.279           0.265 GENE:JGI_V11_245401
+                  Hub2                Hub3                Hub4
+1   GENE:JGI_V11_99656 GENE:JGI_V11_307316  GENE:JGI_V11_36179
+2  GENE:JGI_V11_325563 GENE:JGI_V11_262153 GENE:JGI_V11_324314
+3  GENE:JGI_V11_306805 GENE:JGI_V11_305070 GENE:JGI_V11_243524
+4   GENE:JGI_V11_48702 GENE:JGI_V11_120695 GENE:JGI_V11_321627
+5  GENE:JGI_V11_241171 GENE:JGI_V11_243662 GENE:JGI_V11_238611
+6  GENE:JGI_V11_241305 GENE:JGI_V11_105494  GENE:JGI_V11_96576
+7  GENE:JGI_V11_300507 GENE:JGI_V11_304488 GENE:JGI_V11_109962
+8  GENE:JGI_V11_317026 GENE:JGI_V11_332487  GENE:JGI_V11_61489
+9  GENE:JGI_V11_188572 GENE:JGI_V11_103087  GENE:JGI_V11_30856
+10 GENE:JGI_V11_127734  GENE:JGI_V11_43397  GENE:JGI_V11_48100
+11 GENE:JGI_V11_235385 GENE:JGI_V11_312877 GENE:JGI_V11_307030
+12 GENE:JGI_V11_251954 GENE:JGI_V11_113782 GENE:JGI_V11_109648
+13 GENE:JGI_V11_318320 GENE:JGI_V11_330219 GENE:JGI_V11_315943
+14 GENE:JGI_V11_335074 GENE:JGI_V11_107437 GENE:JGI_V11_301646
+15 GENE:JGI_V11_305455  GENE:JGI_V11_96380  GENE:JGI_V11_10143
+16 GENE:JGI_V11_311899 GENE:JGI_V11_306721 GENE:JGI_V11_306369
+17 GENE:JGI_V11_299902 GENE:JGI_V11_303208 GENE:JGI_V11_329420
+18 GENE:JGI_V11_305420 GENE:JGI_V11_232636 GENE:JGI_V11_192996
+                  Hub5                Hub6                Hub7
+1   GENE:JGI_V11_36959 GENE:JGI_V11_300568 GENE:JGI_V11_250847
+2  GENE:JGI_V11_246487 GENE:JGI_V11_335885 GENE:JGI_V11_332536
+3  GENE:JGI_V11_239875 GENE:JGI_V11_262158 GENE:JGI_V11_305084
+4  GENE:JGI_V11_259346  GENE:JGI_V11_58299 GENE:JGI_V11_242029
+5  GENE:JGI_V11_239115 GENE:JGI_V11_234740 GENE:JGI_V11_235674
+6  GENE:JGI_V11_330513 GENE:JGI_V11_306237  GENE:JGI_V11_97784
+7  GENE:JGI_V11_308928 GENE:JGI_V11_224136 GENE:JGI_V11_243710
+8  GENE:JGI_V11_119891 GENE:JGI_V11_307264  GENE:JGI_V11_58316
+9   GENE:JGI_V11_24548 GENE:JGI_V11_127024 GENE:JGI_V11_303417
+10 GENE:JGI_V11_101710 GENE:JGI_V11_341056 GENE:JGI_V11_302784
+11 GENE:JGI_V11_334105  GENE:JGI_V11_19853 GENE:JGI_V11_233801
+12 GENE:JGI_V11_105408 GENE:JGI_V11_118235 GENE:JGI_V11_232949
+13 GENE:JGI_V11_324745 GENE:JGI_V11_246598 GENE:JGI_V11_336563
+14 GENE:JGI_V11_325405 GENE:JGI_V11_319032 GENE:JGI_V11_258628
+15  GENE:JGI_V11_60333  GENE:JGI_V11_54868 GENE:JGI_V11_306128
+16 GENE:JGI_V11_313570 GENE:JGI_V11_100066 GENE:JGI_V11_312824
+17 GENE:JGI_V11_299957 GENE:JGI_V11_300541  GENE:JGI_V11_50715
+18 GENE:JGI_V11_112052 GENE:JGI_V11_110469 GENE:JGI_V11_306815
+                  Hub8                Hub9               Hub10
+1   GENE:JGI_V11_59164 GENE:JGI_V11_235407  GENE:JGI_V11_43211
+2   GENE:JGI_V11_19438 GENE:JGI_V11_122471 GENE:JGI_V11_246486
+3  GENE:JGI_V11_260744 GENE:JGI_V11_308903 GENE:JGI_V11_227830
+4    GENE:JGI_V11_4141 GENE:JGI_V11_241513 GENE:JGI_V11_104836
+5  GENE:JGI_V11_255722 GENE:JGI_V11_107003 GENE:JGI_V11_239176
+6  GENE:JGI_V11_313443 GENE:JGI_V11_300237 GENE:JGI_V11_219079
+7  GENE:JGI_V11_308446 GENE:JGI_V11_308787 GENE:JGI_V11_191742
+8  GENE:JGI_V11_318808 GENE:JGI_V11_335346 GENE:JGI_V11_102748
+9  GENE:JGI_V11_224357 GENE:JGI_V11_198904 GENE:JGI_V11_311062
+10  GENE:JGI_V11_15274   GENE:JGI_V11_8259 GENE:JGI_V11_245123
+11 GENE:JGI_V11_301269 GENE:JGI_V11_218187 GENE:JGI_V11_318081
+12 GENE:JGI_V11_109812 GENE:JGI_V11_265517 GENE:JGI_V11_323846
+13 GENE:JGI_V11_262219 GENE:JGI_V11_247922 GENE:JGI_V11_198385
+14 GENE:JGI_V11_250706 GENE:JGI_V11_105152 GENE:JGI_V11_260183
+15 GENE:JGI_V11_326119  GENE:JGI_V11_54717  GENE:JGI_V11_94529
+16 GENE:JGI_V11_316249 GENE:JGI_V11_318584 GENE:JGI_V11_224345
+17 GENE:JGI_V11_253338 GENE:JGI_V11_306375  GENE:JGI_V11_93995
+18 GENE:JGI_V11_308011 GENE:JGI_V11_302885 GENE:JGI_V11_313850
+> 
+> write.table(module.stats, "Network_statistics.txt", sep="\t", row=F)
+> 
+> # # TOM heatmap plot, module genes without grey------------------------------------------
+> # # NOTE DB: is not produced properly - we will ignore this for the moment! 
+> color1 <- mergedColors
+> restGenes <- (color1 != "grey")
+> 
+> TOM_no_grey <- TOMsimilarityFromExpr(datExpr1[restGenes], TOMType = "signed", verbose = 3, power=10)
+TOM calculation: adjacency..
+..will use 63 parallel threads.
+ Fraction of slow calculations: 0.000000
+..connectivity..
+..matrix multiplication..
+..normalization..
+..done.
+> dissTOM_no_grey <-  1-TOM_no_grey
+> save(TOM_no_grey, dissTOM_no_grey, file="TOM_dissTOM_no_grey.RData") 
+> 
+> # geneTree_no_grey <- hclust(as.dist(dissTOM_no_grey), method = "average")
+> # diag(dissTOM_no_grey) = NA
+> # plotTOM_no_grey <- dissTOM_no_grey^4 # power 4 to bring out module structure regarding color scale
+> # 
+> # png("TOM heatmap plot - module genes without gray.png") # NB check for lower resolution
+> # TOMplot(plotTOM_no_grey, geneTree_no_grey, as.character(color1[restGenes]), 
+> #        main = "TOM heatmap plot, module genes" )
+> # dev.off()
+> 
+> 
+> # Multi-dimensional scaling plots without grey
+> cmd1=cmdscale(as.dist(dissTOM_no_grey), 2)
+> pdf("CMDscale_no_grey.pdf", 10, 10)
+> par(mfrow=c(1,1))
+> plot(cmd1, col=as.character(mergedColors[restGenes]), main="MDS plot for dissTOM",
++ xlab="Scaling Dimension 1", ylab="Scaling Dimension 2")
+> dev.off()
+null device 
+          1 
+> 
+> 
+> # Exporting to Cytoscape with grey so you can exclude it cyto --------------------------------------------------
+> modules = substring(modules_MM, 4)
+> cyt1 = exportNetworkToCytoscape(TOM,
++   edgeFile = paste("CytoscapeInput-edges-0.3-", paste(modules[1:5], collapse="-"), ".txt", sep=""),
++   nodeFile = paste("CytoscapeInput-nodes-0.3-", paste(modules[1:5], collapse="-"), ".txt", sep=""),
++   weighted = TRUE,
++   threshold = 0.3,
++   nodeNames = names(datExpr1)[is.finite(match(mergedColors, modules))],
++   altNodeNames = NULL, # this is not on the probe level so we used nodeNames as a gene names
++   nodeAttr = mergedColors[is.finite(match(mergedColors, modules))])
+> str(cyt1) # this produced 2 txt files, edges and notes that are ready to be visualized 
+List of 2
+ $ edgeData:'data.frame':	248701 obs. of  6 variables:
+  ..$ fromNode   : chr [1:248701] "GENE:JGI_V11_100036" "GENE:JGI_V11_100036" "GENE:JGI_V11_100036" "GENE:JGI_V11_100036" ...
+  ..$ toNode     : chr [1:248701] "GENE:JGI_V11_109094" "GENE:JGI_V11_117948" "GENE:JGI_V11_191625" "GENE:JGI_V11_203579" ...
+  ..$ weight     : num [1:248701] 0.306 0.301 0.315 0.31 0.307 ...
+  ..$ direction  : chr [1:248701] "undirected" "undirected" "undirected" "undirected" ...
+  ..$ fromAltName: chr [1:248701] "NA" "NA" "NA" "NA" ...
+  ..$ toAltName  : chr [1:248701] "NA" "NA" "NA" "NA" ...
+ $ nodeData:'data.frame':	3226 obs. of  3 variables:
+  ..$ nodeName     : chr [1:3226] "GENE:JGI_V11_100036" "GENE:JGI_V11_100200" "GENE:JGI_V11_100217" "GENE:JGI_V11_100218" ...
+  ..$ altName      : chr [1:3226] "NA" "NA" "NA" "NA" ...
+  ..$ nodeAttribute: chr [1:3226] "brown" "blue" "blue" "blue" ...
+> save(cyt1, file="TOM_cyto_Part2_0.3.rda")
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> proc.time()
+    user   system  elapsed 
+8648.050   69.537 7950.879 
